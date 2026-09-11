@@ -134,3 +134,91 @@ class RepairRunOut(BaseModel):
     ambiguous_columns: list[int]
     truncated: bool
     message: str
+
+
+# ------------------------------------------------------------------ 终端配置
+class PlaybackConfigIn(BaseModel):
+    """回放终端配置；全部可选，缺省取内置 Teletype Model 15 参数。"""
+    columns: int | None = Field(default=None, description="每行字数")
+    baud: float | None = Field(default=None, description="传输速率（波特）")
+    data_bits: int | None = None
+    start_bit: bool | None = None
+    stop_units: float | None = Field(default=None, description="停止位单位数")
+    cr_ms: float | None = Field(default=None, description="字车回程时间 ms")
+    lf_ms: float | None = Field(default=None, description="走纸时间 ms")
+    bell_ms: float | None = None
+    nul_ms: float | None = None
+    auto_lf: bool | None = Field(default=None, description="CR 自动附加 LF")
+    auto_cr: bool | None = Field(default=None, description="LF 自动附加 CR")
+    overflow: str | None = Field(
+        default=None, description="超行宽：mark / wrap / truncate")
+    initial_shift: str | None = None
+
+
+class ProfileCreate(BaseModel):
+    name: str
+    config: PlaybackConfigIn = Field(default_factory=PlaybackConfigIn)
+
+
+class ProfileOut(BaseModel):
+    id: int
+    name: str
+    is_builtin: bool
+    config: dict
+
+    model_config = {"from_attributes": True}
+
+
+class PlaybackRequest(BaseModel):
+    source: str = Field(default="revised",
+                        description="revised=修订孔阵（缺省），original=原始识别孔阵")
+    profile_id: int | None = Field(
+        default=None, description="终端配置存档 id；缺省用内置 Model 15")
+    config: PlaybackConfigIn = Field(default_factory=PlaybackConfigIn)
+    initial_shift: str | None = Field(
+        default=None, description="缺省沿用识别任务的初始移位")
+    save_as: str | None = Field(
+        default=None, description="提供时把本次回放快照存入 SQLite")
+
+
+class PlaybackSummary(BaseModel):
+    rows: int
+    line_lengths: list[int]
+    events: int
+    printed_chars: int
+    overstrike_chars: int
+    overflow_count: int
+    cr_count: int
+    lf_count: int
+    bel_count: int
+    issue_count: int
+
+
+class PlaybackResultOut(BaseModel):
+    source: str
+    initial_shift: str
+    char_ms: float
+    total_ms: float
+    config: dict
+    summary: PlaybackSummary
+    events: list[dict]
+    paper: list[dict]
+    issues: list[dict]
+    snapshot_id: int | None = None
+
+
+class SnapshotOut(BaseModel):
+    id: int
+    job_id: int
+    profile_id: int | None
+    name: str
+    source: str
+    config: dict
+    created_at: str
+    summary: dict
+
+
+class PlaybackDiffRequest(BaseModel):
+    """以 a/b 两组参数各跑一次回放并比较（须针对同一识别任务）。"""
+    a: PlaybackRequest
+    b: PlaybackRequest

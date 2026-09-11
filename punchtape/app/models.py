@@ -1,4 +1,5 @@
-"""SQLite 持久化：纸带、扫描段、码表、识别任务、孔列、解码字符、诊断、人工修订。"""
+"""SQLite 持久化：纸带、扫描段、码表、识别任务、孔列、解码字符、诊断、
+人工修订、修复存档、电传终端配置与纸面回放快照。"""
 from __future__ import annotations
 
 from datetime import datetime, timezone
@@ -81,6 +82,8 @@ class RecognitionJob(Base):
         order_by="Revision.created_at")
     repair_runs: Mapped[list["RepairRun"]] = relationship(
         back_populates="job", cascade="all, delete-orphan")
+    playback_snapshots: Mapped[list["PlaybackSnapshot"]] = relationship(
+        back_populates="job", cascade="all, delete-orphan")
 
 
 class HoleColumnRow(Base):
@@ -149,3 +152,34 @@ class RepairRun(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
     job: Mapped[RecognitionJob] = relationship(back_populates="repair_runs")
+
+
+class TerminalProfile(Base):
+    """电传终端配置（内置机型或用户保存的配置）。"""
+
+    __tablename__ = "terminal_profiles"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(100), unique=True)
+    config: Mapped[str] = mapped_column(Text)     # JSON: TerminalConfig.to_dict()
+    is_builtin: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
+class PlaybackSnapshot(Base):
+    """一次纸面回放的只读快照；不影响识别任务与人工修订。"""
+
+    __tablename__ = "playback_snapshots"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    job_id: Mapped[int] = mapped_column(ForeignKey("recognition_jobs.id"))
+    profile_id: Mapped[int | None] = mapped_column(
+        ForeignKey("terminal_profiles.id"), nullable=True)
+    name: Mapped[str] = mapped_column(String(200), default="")
+    source: Mapped[str] = mapped_column(String(10), default="revised")
+    config: Mapped[str] = mapped_column(Text)       # JSON 终端配置
+    result: Mapped[str] = mapped_column(Text)       # JSON PlayResult.to_dict()
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+    job: Mapped[RecognitionJob] = relationship(
+        back_populates="playback_snapshots")

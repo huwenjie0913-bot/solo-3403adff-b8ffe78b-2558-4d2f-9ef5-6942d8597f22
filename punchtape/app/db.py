@@ -20,7 +20,8 @@ SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False
 
 def init_db() -> None:
     from .codetable import ita2_table
-    from .models import CodeTableRow
+    from .models import CodeTableRow, TerminalProfile
+    from .terminal import BUILTIN_PROFILES
     import json
 
     Base.metadata.create_all(engine)
@@ -32,6 +33,14 @@ def init_db() -> None:
                                definition=json.dumps(t.to_dict()),
                                is_builtin=True))
             s.commit()
+        # 预置内置电传终端机型
+        for prof in BUILTIN_PROFILES:
+            if not s.query(TerminalProfile).filter_by(name=prof["name"]).first():
+                s.add(TerminalProfile(
+                    name=prof["name"],
+                    config=json.dumps(prof["config"].to_dict()),
+                    is_builtin=bool(prof["is_builtin"])))
+        s.commit()
 
 
 def get_db():

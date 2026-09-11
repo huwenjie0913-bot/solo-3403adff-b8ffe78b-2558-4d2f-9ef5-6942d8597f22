@@ -10,7 +10,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from .db import init_db
-from .routers import codetables, jobs, tapes
+from .routers import codetables, jobs, playback, tapes
 
 
 @asynccontextmanager
@@ -30,6 +30,7 @@ app = FastAPI(
 app.include_router(tapes.router)
 app.include_router(codetables.router)
 app.include_router(jobs.router)
+app.include_router(playback.router)
 
 
 @app.get("/health")
