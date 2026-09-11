@@ -10,7 +10,8 @@ from ..db import get_db
 from ..decoding import decode
 from ..export import export_json, export_text
 from ..models import RecognitionJob, RepairRun, Revision, Tape
-from ..pipeline import effective_columns, load_code_table, run_recognition
+from ..pipeline import (effective_columns, job_initial_shift, load_code_table,
+                        run_recognition)
 from ..repair import RepairRules, enumerate_repairs
 from ..schemas import (CandidateOut, ColumnOut, DiagnosticOut, JobOut,
                        RecognizeRequest, RepairRequest, RepairRunOut,
@@ -31,7 +32,7 @@ def _job_out(db: Session, job: RecognitionJob) -> JobOut:
     table, _ = load_code_table(db, job.code_table_id)
     cols = effective_columns(db, job)
     codes = [sum((b & 1) << i for i, b in enumerate(c["bits"])) for c in cols]
-    text = decode(codes, table).text
+    text = decode(codes, table, initial_shift=job_initial_shift(job)).text
     preview = text[:80] + ("…" if len(text) > 80 else "")
     return JobOut(id=job.id, tape_id=job.tape_id,
                   code_table_id=job.code_table_id, status=job.status,
@@ -100,7 +101,7 @@ def get_text(job_id: int, revised: bool = True, db: Session = Depends(get_db)):
     else:
         codes = [sum((int(ch) & 1) << i for i, ch in enumerate(c["raw_bits"]))
                  for c in cols]
-    result = decode(codes, table)
+    result = decode(codes, table, initial_shift=job_initial_shift(job))
     return {"job_id": job_id, "revised": revised, "text": result.text,
             "chars": [{"index": c.index, "code": c.code, "shift": c.shift,
                        "char": c.char, "legal": c.legal}
@@ -161,9 +162,10 @@ def repair(job_id: int, body: RepairRequest, db: Session = Depends(get_db)):
     table, _ = load_code_table(db, job.code_table_id)
     cols = effective_columns(db, job)
     rules = RepairRules(**body.rules.model_dump())
+    initial = body.initial_shift or job_initial_shift(job)
     try:
         result = enumerate_repairs(cols, table, rules,
-                                   initial_shift=body.initial_shift,
+                                   initial_shift=initial,
                                    ambiguous=body.columns)
     except ValueError as e:
         raise HTTPException(422, str(e))

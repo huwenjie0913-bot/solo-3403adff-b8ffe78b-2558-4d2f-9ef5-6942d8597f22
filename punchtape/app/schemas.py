@@ -116,7 +116,8 @@ class RepairRulesIn(BaseModel):
 
 class RepairRequest(BaseModel):
     rules: RepairRulesIn = Field(default_factory=RepairRulesIn)
-    initial_shift: str = "ltrs"
+    initial_shift: str | None = Field(
+        default=None, description="缺省沿用识别任务的 initial_shift")
     columns: list[int] | None = Field(
         default=None, description="指定待修复列；缺省自动选取可疑列")
 

@@ -108,6 +108,8 @@ def run_recognition(db: Session, tape: Tape, req) -> RecognitionJob:
             "tape_width_mm": params.tape_width_mm,
             "sprocket_after_track": params.sprocket_after_track,
             "deskew": params.deskew, "bit_order": params.bit_order,
+            "perspective_corners": params.perspective_corners,
+            "sprocket_y_hint": params.sprocket_y_hint,
             "initial_shift": req.initial_shift,
             "min_overlap": req.min_overlap,
             "overlaps": stitched.overlaps,
@@ -143,6 +145,14 @@ def run_recognition(db: Session, tape: Tape, req) -> RecognitionJob:
     db.commit()
     db.refresh(job)
     return job
+
+
+def job_initial_shift(job: RecognitionJob) -> str:
+    """从任务持久化参数中恢复识别时的初始移位状态。"""
+    try:
+        return json.loads(job.params).get("initial_shift") or "ltrs"
+    except (TypeError, json.JSONDecodeError):
+        return "ltrs"
 
 
 def effective_columns(db: Session, job: RecognitionJob) -> list[dict]:

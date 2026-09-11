@@ -59,10 +59,18 @@ def _code_of(bits: tuple[int, ...]) -> int:
 
 
 def _variants(bits: tuple[int, ...], bit_conf: list[float],
-              rules: RepairRules) -> list[tuple[int, ...]]:
-    """对一列生成备选位型：原样 + 低置信位的 1..max_flips 翻转组合。"""
+              rules: RepairRules, force: bool = False) -> list[tuple[int, ...]]:
+    """对一列生成备选位型：原样 + 可翻转位的 1..max_flips 翻转组合。
+
+    默认只有低置信位可翻转；force=True（人工指定该列）时所有位均可
+    翻转——完整缺孔常被识读为高置信 0，人工怀疑该列时不受置信度限制。
+    """
     options = [tuple(bits)]
-    flippable = [i for i, c in enumerate(bit_conf) if c < rules.conf_threshold]
+    if force:
+        flippable = list(range(len(bits)))
+    else:
+        flippable = [i for i, c in enumerate(bit_conf)
+                     if c < rules.conf_threshold]
     for k in range(1, rules.max_flips_per_column + 1):
         for combo in itertools.combinations(flippable, k):
             alt = list(bits)
@@ -119,10 +127,15 @@ def enumerate_repairs(
     initial_shift: str = "ltrs",
     ambiguous: list[int] | None = None,
 ) -> RepairResult:
-    """枚举修复候选。columns 为合并后的孔列（含置信度与备选读数）。"""
+    """枚举修复候选。columns 为合并后的孔列（含置信度与备选读数）。
+
+    ambiguous 由调用方（人工）指定时，这些列的全部位都参与翻转，
+    不受 conf_threshold 限制；为 None 时自动选取可疑列。
+    """
     rules = rules or RepairRules()
     n = len(columns)
 
+    user_specified = ambiguous is not None
     if ambiguous is None:
         ambiguous = [i for i, c in enumerate(columns)
                      if not c.get("locked")
@@ -135,7 +148,8 @@ def enumerate_repairs(
         if c.get("locked"):
             continue
         opts = [tuple(a) for a in c.get("alternatives", [])]
-        opts += _variants(tuple(c["bits"]), c["bit_confidence"], rules)
+        opts += _variants(tuple(c["bits"]), c["bit_confidence"], rules,
+                          force=user_specified)
         # 去重且保留原读数在首位
         seen, uniq = set(), []
         for o in [tuple(c["bits"])] + opts:

@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from .decoding import decode
 from .models import RecognitionJob
-from .pipeline import effective_columns, load_code_table
+from .pipeline import effective_columns, job_initial_shift, load_code_table
 
 
 def _codes(cols: list[dict], key: str = "bits") -> list[int]:
@@ -32,8 +32,9 @@ def build_export(db: Session, job: RecognitionJob) -> dict:
         raw_codes.append(sum((int(ch) & 1) << i for i, ch in enumerate(b)))
     revised_codes = _codes(cols)
 
-    raw_text = decode(raw_codes, table).text
-    revised = decode(revised_codes, table)
+    initial = job_initial_shift(job)
+    raw_text = decode(raw_codes, table, initial_shift=initial).text
+    revised = decode(revised_codes, table, initial_shift=initial)
 
     diagnostics = [{
         "type": d.type, "severity": d.severity, "column_index": d.column_index,
@@ -93,8 +94,11 @@ def export_text(db: Session, job: RecognitionJob) -> str:
         "== 原始识别文本 ==",
         data["raw_text"],
         "",
-        "== 孔阵（修订后，1=有孔） ==",
+        "== 原始孔阵（1=有孔） ==",
     ]
+    for i, b in enumerate(data["raw_matrix"]):
+        lines.append(f"{i:5d}: {b}")
+    lines += ["", "== 修订孔阵（1=有孔） =="]
     for i, b in enumerate(data["revised_matrix"]):
         mark = ""
         for r in data["revisions"]:
